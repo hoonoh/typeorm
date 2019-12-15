@@ -1329,13 +1329,21 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
         const query = `SELECT "t".*, "v"."check_option" FROM ${this.escapePath(this.getTypeormMetadataTableName())} "t" ` +
             `INNER JOIN "information_schema"."views" "v" ON "v"."table_schema" = "t"."schema" AND "v"."table_name" = "t"."name" WHERE "t"."type" = 'VIEW' ${viewsCondition ? `AND (${viewsCondition})` : ""}`;
         const dbViews = await this.query(query);
-        return dbViews.map((dbView: any) => {
+
+        // materialized views
+        const matViewQuery = `SELECT "t".* FROM "typeorm_metadata" "t"` +
+            `INNER JOIN "pg_catalog"."pg_matviews" "mv" ON "mv".schemaname = "t"."schema" AND "mv"."matviewname" = "t"."name" WHERE "t"."type" = 'VIEW' ${viewsCondition ? `AND (${viewsCondition})` : ""}`;
+        const dbMatViews = await this.query(matViewQuery);
+
+        const mapper = (dbView: any) => {
             const view = new View();
             const schema = dbView["schema"] === currentSchema && !this.driver.options.schema ? undefined : dbView["schema"];
             view.name = this.driver.buildTableName(dbView["name"], schema);
             view.expression = dbView["value"];
             return view;
-        });
+        };
+
+        return [...dbViews.map(mapper),...dbMatViews.map(mapper)];
     }
 
     /**
