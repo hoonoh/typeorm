@@ -1331,7 +1331,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
         const dbViews = await this.query(query);
 
         // materialized views
-        const matViewQuery = `SELECT "t".* FROM "typeorm_metadata" "t"` +
+        const matViewQuery = `SELECT "t".*, TRUE "matview" FROM "typeorm_metadata" "t"` +
             `INNER JOIN "pg_catalog"."pg_matviews" "mv" ON "mv".schemaname = "t"."schema" AND "mv"."matviewname" = "t"."name" WHERE "t"."type" = 'VIEW' ${viewsCondition ? `AND (${viewsCondition})` : ""}`;
         const dbMatViews = await this.query(matViewQuery);
 
@@ -1340,6 +1340,7 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
             const schema = dbView["schema"] === currentSchema && !this.driver.options.schema ? undefined : dbView["schema"];
             view.name = this.driver.buildTableName(dbView["name"], schema);
             view.expression = dbView["value"];
+            view.materialized = dbView["matview"];
             return view;
         };
 
@@ -1782,7 +1783,8 @@ export class PostgresQueryRunner extends BaseQueryRunner implements QueryRunner 
      * Builds drop view sql.
      */
     protected dropViewSql(viewOrPath: View|string): Query {
-        return new Query(`DROP VIEW ${this.escapePath(viewOrPath)}`);
+        const materialized = viewOrPath instanceof View && viewOrPath.materialized ? 'MATERIALIZED ' : '';
+        return new Query(`DROP ${materialized}VIEW ${this.escapePath(viewOrPath)}`);
     }
 
     /**
